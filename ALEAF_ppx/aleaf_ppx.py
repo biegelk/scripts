@@ -167,6 +167,27 @@ def cli_args():
     return args
 
 
+def get_data_dirs(data_dir):
+    # List of directories from which to retrieve data
+    data_dirs_list = []
+
+    # Required file globs
+    globs = ["ALEAF_Master_LC_GTEP*.xlsx", "*system_tech_summary*.csv"]
+
+    # Check whether necessary file globs are found in the top level of data_dir
+    if all([len(list(Path(data_dir).glob(pattern))) > 0 for pattern in globs]):
+        data_dirs_list.append(Path(data_dir))
+
+    # For all subdirectories in data_dir, check whether it shows at least one
+    #   match for each required file glob
+    for path in Path(data_dir).glob("**/*"):
+        if path.is_dir():
+            if all([len(list(path.glob(pattern))) > 0 for pattern in globs]):
+                data_dirs_list.append(path)
+
+    return data_dirs_list        
+
+
 def read_ALEAF_data(data_dir):
     sts_data = read_sts_data(data_dir)
     simconfig_data, unit_specs = read_settings_data(data_dir)
@@ -256,6 +277,7 @@ def make_db_tables(db, tables):
 
         # Add this table to the database
         cur.execute(cmd)
+        db.commit()
 
 
 def add_ALEAF_data_to_db(db, simconfig_data, unit_specs, sts_data):
@@ -263,19 +285,27 @@ def add_ALEAF_data_to_db(db, simconfig_data, unit_specs, sts_data):
     unit_specs.to_sql("unit_specs", db, if_exists="append", index=False)
     sts_data.to_sql("system_tech_summary_data", db, if_exists="append", index=False)
 
+    db.commit()
+
 
 def postprocess_aleaf_data(args):
     # Set up the logger
     logging.basicConfig(level=logging.INFO)
 
-    # Read in the A-LEAF data
-    sts_data, simconfig_data, unit_specs = read_ALEAF_data(args.dir)
-
-    # Create the database file (if necessary) and open a sqlite connection to it
+    # Create the database file (if necessary) and open a sqlite connection
+    #   to it
     db = open_db(args)
 
-    # Add the A-LEAF data to the database
-    add_ALEAF_data_to_db(db, simconfig_data, unit_specs, sts_data)
+    # Get the list of all directories containing the necessary sets of
+    #   data files
+    data_dirs_list = get_data_dirs(args.dir)
+
+    for data_dir in data_dirs_list:
+        # Read in the A-LEAF data
+        sts_data, simconfig_data, unit_specs = read_ALEAF_data(data_dir)
+
+        # Add the A-LEAF data to the database
+        add_ALEAF_data_to_db(db, simconfig_data, unit_specs, sts_data)
 
 if __name__ == "__main__":
     args = cli_args()
