@@ -301,6 +301,7 @@ def postprocess_aleaf_data(args):
     data_dirs_list = get_data_dirs(args.dir)
 
     for data_dir in data_dirs_list:
+        logging.info(f"Retrieving data from {data_dir}.")
         # Read in the A-LEAF data
         sts_data, simconfig_data, unit_specs = read_ALEAF_data(data_dir)
 
