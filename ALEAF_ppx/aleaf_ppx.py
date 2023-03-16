@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import os
 import plotly.express as px
 import kaleido
@@ -161,6 +162,11 @@ def cli_args():
         help="overwrite the database file, if it already exists"
     )
 
+    parser.add_argument(
+        "--plot", "-p",
+        action="store_true",
+        help="flag to plot new nuclear construction data for all loaded files"
+    )
 
     args = parser.parse_args()
 
@@ -288,6 +294,37 @@ def add_ALEAF_data_to_db(db, simconfig_data, unit_specs, sts_data):
     db.commit()
 
 
+def plot_C2N_deployment(sts_data):
+    C2N_list = ["greenfield_PWR", "C2N_PWR", "greenfield_SFR", "C2N_SFR", "greenfield_HTGR", "C2N_HTGR"]
+
+    scenario_id = sts_data.loc[0, "Scenario"]
+
+    sts_filtered = sts_data[sts_data["UnitGroup"].isin(C2N_list)]
+
+    state_pivot = pd.pivot_table(
+                      sts_filtered,
+                      values="NewUnits",
+                      index="Region_Name",
+                      aggfunc=np.sum
+                  ).reset_index()
+
+    state_pivot["NewUnits"] = state_pivot["NewUnits"].round(decimals=0)
+
+    fig = px.choropleth(
+              state_pivot,
+              locations="Region_Name",
+              locationmode="USA-states",
+              scope="usa",
+              color="NewUnits",
+              color_continuous_scale="Viridis",
+              title=scenario_id
+          )
+
+
+    fig.write_image(f"./{scenario_id}_new_C2N_map.png")
+
+
+
 def postprocess_aleaf_data(args):
     # Set up the logger
     logging.basicConfig(level=logging.INFO)
@@ -307,6 +344,9 @@ def postprocess_aleaf_data(args):
 
         # Add the A-LEAF data to the database
         add_ALEAF_data_to_db(db, simconfig_data, unit_specs, sts_data)
+
+        if args.plot:
+            plot_C2N_deployment(sts_data)
 
 if __name__ == "__main__":
     args = cli_args()
